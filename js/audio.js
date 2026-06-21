@@ -2,6 +2,7 @@ const Audio = {
   ctx: null,
   muted: false,
   masterGain: null,
+  unlocked: false,
 
   init() {
     try {
@@ -13,6 +14,23 @@ const Audio = {
     } catch (e) {
       console.log('Web Audio not supported');
     }
+  },
+
+  unlock() {
+    if (this.unlocked || !this.ctx) return;
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.frequency.value = 440;
+    gain.gain.value = 0.0001;
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(t);
+    osc.stop(t + 0.001);
+    this.unlocked = true;
   },
 
   _resume() {

@@ -127,16 +127,19 @@ const Game = {
     });
 
     this.canvas.addEventListener('click', e => {
+      Audio.unlock();
       const p = getPos(e);
       this._onClick(p.x, p.y);
     });
 
     this.canvas.addEventListener('contextmenu', e => {
       e.preventDefault();
+      Audio.unlock();
       UI.clearSelection();
     });
 
     window.addEventListener('keydown', e => {
+      Audio.unlock();
       if (e.key === 'Escape') UI.clearSelection();
       if (e.key.toLowerCase() === 'p') this.togglePause();
       if (e.key.toLowerCase() === 'm') this.toggleMute();
@@ -215,6 +218,7 @@ const Game = {
   },
 
   _update(dt) {
+    if (this.paused || this.over) return;
     WaveManager.update(dt, this.enemies);
 
     for (let i = 0; i < this.towers.length; i++) {
