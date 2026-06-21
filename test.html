@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Tower Defense - 单元测试</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 28px; margin-bottom: 8px; color: #ffd166; }
+  .subtitle { color: #888; margin-bottom: 24px; font-size: 14px; }
+  .summary {
+    background: #16213e;
+    padding: 16px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .summary-item { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+  .summary-item .label { color: #888; }
+  .summary-item .val { font-weight: bold; font-size: 18px; }
+  .pass .val { color: #06d6a0; }
+  .fail .val { color: #ef476f; }
+  .total .val { color: #a0c4ff; }
+  .time .val { color: #ffd166; }
+  .suite {
+    background: #16213e;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+  }
+  .suite-header {
+    padding: 14px 20px;
+    background: #0f3460;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+  .suite-header:hover { background: #11407a; }
+  .suite-title { font-weight: bold; font-size: 16px; }
+  .suite-stats { font-size: 13px; color: #888; }
+  .suite-body { padding: 4px 0; display: none; }
+  .suite.open .suite-body { display: block; }
+  .suite.pass .suite-title::before { content: '✓ '; color: #06d6a0; }
+  .suite.fail .suite-title::before { content: '✗ '; color: #ef476f; }
+  .test {
+    padding: 10px 20px 10px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    border-left: 3px solid transparent;
+  }
+  .test:hover { background: rgba(255,255,255,0.03); }
+  .test.pass { border-left-color: #06d6a0; }
+  .test.fail { border-left-color: #ef476f; background: rgba(239,71,111,0.05); }
+  .test-name { font-size: 14px; flex: 1; }
+  .test.pass .test-name { color: #ccc; }
+  .test.fail .test-name { color: #ff8fa3; font-weight: 500; }
+  .test-dur { font-size: 12px; color: #666; font-variant-numeric: tabular-nums; }
+  .test-error {
+    margin-top: 6px;
+    padding: 10px 12px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 4px;
+    font-family: 'Consolas', monospace;
+    font-size: 12px;
+    color: #ff8fa3;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .pass-icon { color: #06d6a0; }
+  .fail-icon { color: #ef476f; }
+  .btn {
+    padding: 8px 16px;
+    background: #06d6a0;
+    color: #1a1a2e;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+  }
+  .btn:hover { background: #05c290; }
+  .btn:disabled { background: #444; color: #888; cursor: not-allowed; }
+  .running { text-align: center; padding: 40px; color: #888; font-size: 16px; }
+  .loading-dots::after {
+    content: '';
+    animation: dots 1.5s infinite;
+  }
+  @keyframes dots {
+    0%, 20% { content: '.'; }
+    40% { content: '..'; }
+    60%, 100% { content: '...'; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🏰 Tower Defense - 单元测试</h1>
+  <p class="subtitle">测试核心逻辑模块，不含 Canvas 渲染和 UI 交互</p>
+
+  <div id="summary" class="summary" style="display:none;">
+    <div class="summary-item total"><span class="label">总数:</span><span class="val" id="totalVal">0</span></div>
+    <div class="summary-item pass"><span class="label">通过:</span><span class="val" id="passVal">0</span></div>
+    <div class="summary-item fail"><span class="label">失败:</span><span class="val" id="failVal">0</span></div>
+    <div class="summary-item time"><span class="label">耗时:</span><span class="val" id="timeVal">0ms</span></div>
+    <div style="flex:1;"></div>
+    <button class="btn" onclick="location.reload()">🔄 重新运行</button>
+  </div>
+
+  <div id="running" class="running">
+    加载模块<span class="loading-dots"></span>
+  </div>
+
+  <div id="results"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/map.js"></script>
+<script src="js/enemy.js"></script>
+<script src="js/bullet.js"></script>
+<script src="js/tower.js"></script>
+<script src="js/wave.js"></script>
+
+<script>
+window.Game = {
+  towers: [],
+  enemies: [],
+  bullets: [],
+  effects: [],
+  paused: false,
+  over: false,
+  gold: 0,
+  lives: 0,
+  score: 0,
+};
+</script>
+
+<script>
+window.TestRunner = {
+  suites: [],
+  results: [],
+  startTime: 0,
+
+  assert(condition, message) {
+    if (!condition) {
+      throw new Error(message || 'Assertion failed');
+    }
+  },
+
+  assertEqual(actual, expected, message) {
+    const a = JSON.stringify(actual);
+    const e = JSON.stringify(expected);
+    if (a !== e) {
+      throw new Error(message || `Expected ${e}, got ${a}`);
+    }
+  },
+
+  assertClose(actual, expected, eps = 0.01, message) {
+    if (Math.abs(actual - expected) > eps) {
+      throw new Error(message || `Expected ${expected} ± ${eps}, got ${actual}`);
+    }
+  },
+
+  assertThrows(fn, message) {
+    let threw = false;
+    try { fn(); } catch (e) { threw = true; }
+    if (!threw) {
+      throw new Error(message || 'Expected function to throw');
+    }
+  },
+
+  describe(name, fn) {
+    const suite = { name, fn, tests: [] };
+    this.suites.push(suite);
+    fn();
+  },
+
+  it(name, fn) {
+    const suite = this.suites[this.suites.length - 1];
+    suite.tests.push({ name, fn });
+  },
+
+  async run() {
+    this.startTime = performance.now();
+    this.results = [];
+
+    try { GameMap.init(); } catch(e) {}
+
+    for (const suite of this.suites) {
+      const suiteResult = { name: suite.name, tests: [], pass: 0, fail: 0 };
+      for (const test of suite.tests) {
+        const t0 = performance.now();
+        try {
+          await test.fn();
+          const dur = performance.now() - t0;
+          suiteResult.tests.push({ name: test.name, pass: true, dur });
+          suiteResult.pass++;
+        } catch (e) {
+          const dur = performance.now() - t0;
+          suiteResult.tests.push({ name: test.name, pass: false, dur, error: e.message });
+          suiteResult.fail++;
+        }
+      }
+      this.results.push(suiteResult);
+    }
+    this.render();
+  },
+
+  render() {
+    const results = this.results;
+    let totalPass = 0, totalFail = 0;
+    let totalDur = 0;
+
+    for (const s of results) {
+      totalPass += s.pass;
+      totalFail += s.fail;
+      for (const t of s.tests) totalDur += t.dur;
+    }
+
+    document.getElementById('running').style.display = 'none';
+    document.getElementById('summary').style.display = 'flex';
+    document.getElementById('totalVal').textContent = totalPass + totalFail;
+    document.getElementById('passVal').textContent = totalPass;
+    document.getElementById('failVal').textContent = totalFail;
+    document.getElementById('timeVal').textContent = Math.round(totalDur) + 'ms';
+
+    const html = results.map((s, si) => {
+      const passClass = s.fail === 0 ? 'pass' : 'fail';
+      const openClass = s.fail > 0 ? 'open' : '';
+      return `
+        <div class="suite ${passClass} ${openClass}" data-suite="${si}">
+          <div class="suite-header">
+            <span class="suite-title">${escapeHtml(s.name)}</span>
+            <span class="suite-stats">${s.pass} 通 / ${s.fail} 败 / ${s.tests.length} 总</span>
+          </div>
+          <div class="suite-body">
+            ${s.setupError ? `<div class="test fail"><div class="test-name">Suite setup error: ${escapeHtml(s.setupError)}</div></div>` : ''}
+            ${s.tests.map((t, ti) => `
+              <div class="test ${t.pass ? 'pass' : 'fail'}">
+                <div style="flex:1;">
+                  <div class="test-name">${t.pass ? '<span class="pass-icon">✓</span> ' : '<span class="fail-icon">✗</span> '}${escapeHtml(t.name)}</div>
+                  ${t.error ? `<div class="test-error">${escapeHtml(t.error)}</div>` : ''}
+                </div>
+                <div class="test-dur">${t.dur.toFixed(1)}ms</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('results').innerHTML = html;
+
+    document.querySelectorAll('.suite-header').forEach(h => {
+      h.addEventListener('click', () => {
+        h.parentElement.classList.toggle('open');
+      });
+    });
+  },
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function makeMockEnemy(type = 'grunt', x = 0, y = 0, hp = null) {
+  const e = new Enemy(type);
+  e.x = x;
+  e.y = y;
+  e.hp = hp !== null ? hp : e.maxHp;
+  return e;
+}
+
+function makeMockTower(type = 'archer', x = 0, y = 0) {
+  return new Tower(type, x, y);
+}
+
+function makeMockBullet(target, opts = {}) {
+  return new Bullet(0, 0, target, {
+    bulletSpeed: 500,
+    damage: 10,
+    splash: 0,
+    slow: 0,
+    slowDuration: 0,
+    color: '#fff',
+    ...opts
+  });
+}
+
+(function defineTests() {
+  const T = TestRunner;
+  const { assert, assertEqual, assertClose, assertThrows } = T;
+
+  T.describe('config.js - 波次数据校验', () => {
+
+    T.it('CONFIG 对象存在且包含必要字段', () => {
+      assert(CONFIG, 'CONFIG 未定义');
+      assert(CONFIG.waves, '没有 waves 字段');
+      assert(CONFIG.enemies, '没有 enemies 字段');
+      assert(CONFIG.towers, '没有 towers 字段');
+      assert(CONFIG.path, '没有 path 字段');
+      assert(Array.isArray(CONFIG.waves), 'waves 不是数组');
+      assert(CONFIG.waves.length > 0, 'waves 数组为空');
+    });
+
+    T.it('每个波次有 enemies 数组且不为空', () => {
+      for (let i = 0; i < CONFIG.waves.length; i++) {
+        const w = CONFIG.waves[i];
+        assert(w.enemies, `第 ${i+1} 波没有 enemies 字段`);
+        assert(Array.isArray(w.enemies), `第 ${i+1} 波 enemies 不是数组`);
+        assert(w.enemies.length > 0, `第 ${i+1} 波 enemies 数组为空`);
+      }
+    });
+
+    T.it('每个 enemy group 有合法的 type、count、delay', () => {
+      const validTypes = Object.keys(CONFIG.enemies);
+      for (let i = 0; i < CONFIG.waves.length; i++) {
+        const w = CONFIG.waves[i];
+        for (let j = 0; j < w.enemies.length; j++) {
+          const g = w.enemies[j];
+          assert(g.type, `波 ${i+1} 组 ${j+1} 没有 type`);
+          assert(validTypes.includes(g.type), `波 ${i+1} 组 ${j+1} type "${g.type}" 非法，应为 ${validTypes.join('/')}`);
+          assert(typeof g.count === 'number' && g.count > 0, `波 ${i+1} 组 ${j+1} count ${g.count} 非法`);
+          assert(typeof g.delay === 'number' && g.delay > 0, `波 ${i+1} 组 ${j+1} delay ${g.delay} 非法`);
+        }
+      }
+    });
+
+    T.it('每个 enemy 类型配置完整', () => {
+      for (const [name, cfg] of Object.entries(CONFIG.enemies)) {
+        assert(cfg.name, `enemy ${name} 缺少 name`);
+        assert(typeof cfg.hp === 'number' && cfg.hp > 0, `enemy ${name} hp 非法`);
+        assert(typeof cfg.speed === 'number' && cfg.speed > 0, `enemy ${name} speed 非法`);
+        assert(typeof cfg.gold === 'number' && cfg.gold >= 0, `enemy ${name} gold 非法`);
+        assert(typeof cfg.score === 'number' && cfg.score >= 0, `enemy ${name} score 非法`);
+        assert(cfg.color, `enemy ${name} 缺少 color`);
+        assert(typeof cfg.radius === 'number' && cfg.radius > 0, `enemy ${name} radius 非法`);
+      }
+    });
+
+    T.it('每个 tower 类型配置完整', () => {
+      for (const [name, cfg] of Object.entries(CONFIG.towers)) {
+        assert(cfg.name, `tower ${name} 缺少 name`);
+        assert(typeof cfg.cost === 'number' && cfg.cost > 0, `tower ${name} cost 非法`);
+        assert(typeof cfg.range === 'number' && cfg.range > 0, `tower ${name} range 非法`);
+        assert(typeof cfg.damage === 'number' && cfg.damage > 0, `tower ${name} damage 非法`);
+        assert(typeof cfg.fireRate === 'number' && cfg.fireRate > 0, `tower ${name} fireRate 非法`);
+        assert(cfg.color, `tower ${name} 缺少 color`);
+        assert(cfg.accent, `tower ${name} 缺少 accent`);
+        assert(typeof cfg.bulletSpeed === 'number' && cfg.bulletSpeed > 0, `tower ${name} bulletSpeed 非法`);
+      }
+    });
+
+    T.it('path 数组至少有 2 个点且坐标合理', () => {
+      assert(CONFIG.path.length >= 2, 'path 点数不足');
+      for (const p of CONFIG.path) {
+        assert(typeof p.x === 'number', 'path 点 x 非法');
+        assert(typeof p.y === 'number', 'path 点 y 非法');
+      }
+      const last = CONFIG.path[CONFIG.path.length - 1];
+      assert(last.x <= CONFIG.canvas.width, '终点 x 超出画布');
+      assert(last.x >= 0, '终点 x 小于 0');
+      assert(last.y <= CONFIG.canvas.height, '终点 y 超出画布');
+      assert(last.y >= 0, '终点 y 小于 0');
+    });
+
+    T.it('升级系数配置合理', () => {
+      assert(CONFIG.upgrade.damageMul > 1, '伤害升级系数应 > 1');
+      assert(CONFIG.upgrade.rangeMul > 1, '射程升级系数应 > 1');
+      assert(CONFIG.upgrade.fireRateMul < 1, '攻速升级系数应 < 1（冷却变短）');
+      assert(CONFIG.upgrade.costMul > 1, '费用升级系数应 > 1');
+      assert(CONFIG.sellRefundRatio > 0 && CONFIG.sellRefundRatio <= 1, '出售返还比例应在 (0,1]');
+      assert(CONFIG.maxTowerLevel >= 2, '最大等级至少为 2');
+    });
+  });
+
+  T.describe('enemy.js - 怪物逻辑', () => {
+
+    T.it('构造函数正确初始化属性', () => {
+      const e = new Enemy('grunt');
+      assertEqual(e.type, 'grunt');
+      assertEqual(e.maxHp, CONFIG.enemies.grunt.hp);
+      assertEqual(e.hp, CONFIG.enemies.grunt.hp);
+      assertEqual(e.baseSpeed, CONFIG.enemies.grunt.speed);
+      assertEqual(e.speed, CONFIG.enemies.grunt.speed);
+      assertEqual(e.alive, true);
+      assertEqual(e.reachedEnd, false);
+      assertEqual(e.slowFactor, 1);
+      assertEqual(e.slowTimer, 0);
+    });
+
+    T.it('damage() 扣血正确，hp<=0 时 alive=false', () => {
+      const e = makeMockEnemy('grunt', 0, 0, 100);
+      e.damage(30);
+      assertEqual(e.hp, 70);
+      assertEqual(e.alive, true);
+      e.damage(70);
+      assertEqual(e.hp, 0);
+      assertEqual(e.alive, false);
+    });
+
+    T.it('damage() 过量伤害时 hp 为 0 不为负', () => {
+      const e = makeMockEnemy('grunt', 0, 0, 50);
+      e.damage(200);
+      assertEqual(e.hp, 0);
+      assertEqual(e.alive, false);
+    });
+
+    T.it('applySlow() 应用更强的减速', () => {
+      const e = new Enemy('grunt');
+      e.applySlow(0.7, 2);
+      assertEqual(e.slowFactor, 0.7);
+      assertEqual(e.slowTimer, 2);
+    });
+
+    T.it('applySlow() 保留更强效果而非更弱', () => {
+      const e = new Enemy('grunt');
+      e.applySlow(0.5, 2);
+      e.applySlow(0.8, 3);
+      assertEqual(e.slowFactor, 0.5);
+    });
+
+    T.it('applySlow() 同减速下取更长时长', () => {
+      const e = new Enemy('grunt');
+      e.applySlow(0.7, 1);
+      e.applySlow(0.7, 3);
+      assertEqual(e.slowTimer, 3);
+    });
+
+    T.it('update() 减速随时间衰减并恢复正常速度', () => {
+      const e = new Enemy('grunt');
+      e.applySlow(0.5, 1.5);
+      e.update(0.5);
+      assertEqual(e.slowFactor, 0.5);
+      assertClose(e.slowTimer, 1.0);
+      assertClose(e.speed, e.baseSpeed * 0.5);
+      e.update(1.5);
+      assertEqual(e.slowFactor, 1);
+      assertEqual(e.speed, e.baseSpeed);
+    });
+
+    T.it('update() 移动距离正确', () => {
+      const e = new Enemy('grunt');
+      const oldDist = e.distance;
+      const speed = e.speed;
+      e.update(1.0);
+      assertClose(e.distance, oldDist + speed * 1.0, 0.1);
+    });
+
+    T.it('不同类型构造正确', () => {
+      for (const type of Object.keys(CONFIG.enemies)) {
+        const e = new Enemy(type);
+        assertEqual(e.type, type);
+        assertEqual(e.maxHp, CONFIG.enemies[type].hp);
+      }
+    });
+  });
+
+  T.describe('tower.js - 塔逻辑', () => {
+
+    T.it('构造函数正确初始化 Lv.1 属性', () => {
+      const t = makeMockTower('archer');
+      const cfg = CONFIG.towers.archer;
+      assertEqual(t.type, 'archer');
+      assertEqual(t.level, 1);
+      assertEqual(t.range, cfg.range);
+      assertEqual(t.damage, cfg.damage);
+      assertEqual(t.fireRate, cfg.fireRate);
+      assertEqual(t.totalCost, cfg.cost);
+    });
+
+    T.it('getUpgradeCost() 计算正确（按指数递增）', () => {
+      const t = makeMockTower('archer');
+      const base = CONFIG.towers.archer.cost;
+      const mul = CONFIG.upgrade.costMul;
+      assertEqual(t.getUpgradeCost(), Math.round(base * Math.pow(mul, 1)));
+      t.upgrade();
+      assertEqual(t.getUpgradeCost(), Math.round(base * Math.pow(mul, 2)));
+    });
+
+    T.it('满级后 getUpgradeCost() 返回 null，canUpgrade() 返回 false', () => {
+      const t = makeMockTower('archer');
+      while (t.level < CONFIG.maxTowerLevel) {
+        assertEqual(t.canUpgrade(), true);
+        assert(t.getUpgradeCost() !== null, '升级中费用不应为 null');
+        t.upgrade();
+      }
+      assertEqual(t.canUpgrade(), false);
+      assertEqual(t.getUpgradeCost(), null);
+    });
+
+    T.it('upgrade() 提升属性符合配置系数', () => {
+      const t = makeMockTower('archer');
+      const baseDmg = t.damage;
+      const baseRange = t.range;
+      const baseRate = t.fireRate;
+      t.upgrade();
+      assertClose(t.damage, baseDmg * CONFIG.upgrade.damageMul, 1);
+      assertClose(t.range, baseRange * CONFIG.upgrade.rangeMul, 1);
+      assertClose(t.fireRate, baseRate * CONFIG.upgrade.fireRateMul, 0.001);
+      assertEqual(t.level, 2);
+    });
+
+    T.it('upgrade() 正确累加 totalCost', () => {
+      const t = makeMockTower('archer');
+      const baseCost = CONFIG.towers.archer.cost;
+      const cost1 = t.getUpgradeCost();
+      t.upgrade();
+      assertEqual(t.totalCost, baseCost + cost1);
+      const cost2 = t.getUpgradeCost();
+      t.upgrade();
+      assertEqual(t.totalCost, baseCost + cost1 + cost2);
+    });
+
+    T.it('getSellValue() 按比例返还累计成本', () => {
+      const t = makeMockTower('archer');
+      const baseCost = CONFIG.towers.archer.cost;
+      assertEqual(t.getSellValue(), Math.round(baseCost * CONFIG.sellRefundRatio));
+      const cost1 = t.getUpgradeCost();
+      t.upgrade();
+      assertEqual(t.getSellValue(), Math.round((baseCost + cost1) * CONFIG.sellRefundRatio));
+    });
+
+    T.it('满级（3级）后升级失败', () => {
+      const t = makeMockTower('archer');
+      t.upgrade(); t.upgrade();
+      assertEqual(t.level, 3);
+      const before = { dmg: t.damage, range: t.range };
+      const result = t.upgrade();
+      assertEqual(result, false);
+      assertEqual(t.damage, before.dmg);
+      assertEqual(t.range, before.range);
+    });
+
+    T.it('三种塔升级逻辑一致', () => {
+      for (const type of Object.keys(CONFIG.towers)) {
+        const t = makeMockTower(type);
+        const cost1 = t.getUpgradeCost();
+        t.upgrade();
+        assertEqual(t.totalCost, t.baseCost + cost1);
+        assertEqual(t.level, 2);
+      }
+    });
+  });
+
+  T.describe('bullet.js - 子弹逻辑', () => {
+
+    T.it('单体子弹目标死亡后立即 dead=true', () => {
+      const target = makeMockEnemy('grunt', 100, 100, 100);
+      target.alive = false;
+      const b = makeMockBullet(target, { splash: 0 });
+      b.update(0.016, []);
+      assertEqual(b.dead, true);
+    });
+
+    T.it('溅射子弹目标死亡后继续飞向原坐标', () => {
+      const target = makeMockEnemy('grunt', 100, 100, 100);
+      target.alive = false;
+      const b = makeMockBullet(target, { splash: 50 });
+      b.update(0.016, []);
+      assertEqual(b.dead, false);
+    });
+
+    T.it('子弹击中目标造成伤害', () => {
+      const target = makeMockEnemy('grunt', 100, 100, 100);
+      const b = makeMockBullet(target, { splash: 0, damage: 30 });
+      b.x = 99; b.y = 100;
+      b.targetX = 100; b.targetY = 100;
+      b.update(0.016, [target]);
+      assertEqual(target.hp, 70);
+      assertEqual(b.dead, true);
+    });
+
+    T.it('溅射子弹对范围内敌人造成伤害', () => {
+      const e1 = makeMockEnemy('grunt', 100, 100, 100);
+      const e2 = makeMockEnemy('grunt', 110, 100, 100);
+      const e3 = makeMockEnemy('grunt', 200, 100, 100);
+      const target = e1;
+      const b = makeMockBullet(target, { splash: 30, damage: 20 });
+      b.x = 100; b.y = 100; b.targetX = 100; b.targetY = 100;
+      b._impact([e1, e2, e3]);
+      assertEqual(e1.hp, 80, '范围内目标1应受伤');
+      assertEqual(e2.hp, 80, '范围内目标2应受伤');
+      assertEqual(e3.hp, 100, '范围外目标不应受伤');
+    });
+
+    T.it('减速效果正确应用到击中目标', () => {
+      const target = makeMockEnemy('grunt', 100, 100, 100);
+      const b = makeMockBullet(target, { splash: 0, slow: 0.5, slowDuration: 2 });
+      b.x = 100; b.y = 100; b.targetX = 100; b.targetY = 100;
+      b._impact([target]);
+      assertEqual(target.slowFactor, 0.5);
+      assertEqual(target.slowTimer, 2);
+    });
+
+    T.it('溅射子弹减速效果应用到所有命中目标', () => {
+      const e1 = makeMockEnemy('grunt', 100, 100, 100);
+      const e2 = makeMockEnemy('grunt', 110, 100, 100);
+      const b = makeMockBullet(e1, { splash: 30, slow: 0.4, slowDuration: 1.5 });
+      b.x = 100; b.y = 100; b.targetX = 100; b.targetY = 100;
+      b._impact([e1, e2]);
+      assertEqual(e1.slowFactor, 0.6);
+      assertEqual(e1.slowTimer, 1.5);
+      assertEqual(e2.slowFactor, 0.6);
+      assertEqual(e2.slowTimer, 1.5);
+    });
+
+    T.it('子弹飞行距离正确', () => {
+      const target = makeMockEnemy('grunt', 100, 0, 100);
+      const b = makeMockBullet(target, { splash: 0, bulletSpeed: 100 });
+      b.x = 0; b.y = 0; b.targetX = 100; b.targetY = 0;
+      b.update(0.5, [target]);
+      assertClose(b.x, 50, 0.1);
+      assertEqual(b.y, 0);
+      assertEqual(b.dead, false);
+    });
+
+    T.it('到达目标位置时触发 impact 并 dead=true', () => {
+      const target = makeMockEnemy('grunt', 10, 0, 100);
+      const b = makeMockBullet(target, { splash: 0, bulletSpeed: 100 });
+      b.x = 0; b.y = 0; b.targetX = 10; b.targetY = 0;
+      b.update(1, [target]);
+      assertEqual(b.dead, true);
+    });
+  });
+
+  T.describe('wave.js - 波次管理', () => {
+
+    T.it('reset() 正确重置所有状态', () => {
+      WaveManager.reset();
+      assertEqual(WaveManager.index, 0);
+      assertEqual(WaveManager.active, false);
+      assertEqual(WaveManager.spawnQueue.length, 0);
+      assertEqual(WaveManager.countdownActive, false);
+      assertEqual(WaveManager.countdown, 0);
+    });
+
+    T.it('total() 返回波次数等于配置长度', () => {
+      assertEqual(WaveManager.total(), CONFIG.waves.length);
+    });
+
+    T.it('startNext() 正确加载第 1 波怪物', () => {
+      WaveManager.reset();
+      const result = WaveManager.startNext();
+      assertEqual(result, true);
+      assertEqual(WaveManager.active, true);
+      assertEqual(WaveManager.index, 1);
+      const wave1Count = CONFIG.waves[0].enemies.reduce((s, g) => s + g.count, 0);
+      assertEqual(WaveManager.spawnQueue.length, wave1Count);
+    });
+
+    T.it('重复调用 startNext() 在波次进行中返回 false', () => {
+      WaveManager.reset();
+      WaveManager.startNext();
+      const result = WaveManager.startNext();
+      assertEqual(result, false);
+      assertEqual(WaveManager.index, 1);
+    });
+
+    T.it('update() 按间隔生成怪物', () => {
+      WaveManager.reset();
+      WaveManager.startNext();
+      const spawnQueueLenBefore = WaveManager.spawnQueue.length;
+      const enemies = [];
+      WaveManager.update(0.01, enemies);
+      assertEqual(enemies.length, 1, '应生成 1 个怪物');
+      assertEqual(WaveManager.spawnQueue.length, spawnQueueLenBefore - 1);
+      assert(enemies[0] instanceof Enemy, '生成的应该是 Enemy 实例');
+      const firstDelay = WaveManager.spawnQueue[0]?.delay || 0.9;
+      WaveManager.update(firstDelay - 0.02, enemies);
+      assertEqual(enemies.length, 1, '间隔未到时不应生成更多');
+      WaveManager.update(0.03, enemies);
+      assertEqual(enemies.length, 2, '间隔到了应生成第 2 个');
+    });
+
+    T.it('isWaveCleared() 波次清空时返回 true', () => {
+      WaveManager.reset();
+      assertEqual(WaveManager.isWaveCleared([]), false, '波次未开始时不应算清空');
+      WaveManager.startNext();
+      assertEqual(WaveManager.isWaveCleared([]), false, '队列还有怪时不算清空');
+      WaveManager.spawnQueue = [];
+      assertEqual(WaveManager.isWaveCleared([new Enemy('grunt')]), false, '场上还有怪时不算清空');
+      assertEqual(WaveManager.isWaveCleared([]), true, '队列空且场上空才算清空');
+    });
+
+    T.it('complete() 标记波次结束', () => {
+      WaveManager.reset();
+      WaveManager.startNext();
+      WaveManager.complete();
+      assertEqual(WaveManager.active, false);
+    });
+
+    T.it('startCountdown() 正确启动倒计时', () => {
+      WaveManager.reset();
+      const result = WaveManager.startCountdown();
+      assertEqual(result, true);
+      assertEqual(WaveManager.countdownActive, true);
+      assertClose(WaveManager.countdown, CONFIG.waveCountdown, 0.001);
+    });
+
+    T.it('startCountdown() 在波次进行中返回 false', () => {
+      WaveManager.reset();
+      WaveManager.startNext();
+      const result = WaveManager.startCountdown();
+      assertEqual(result, false);
+    });
+
+    T.it('update() 倒计时随时间减少', () => {
+      WaveManager.reset();
+      WaveManager.startCountdown();
+      WaveManager.update(2, []);
+      assertClose(WaveManager.countdown, CONFIG.waveCountdown - 2, 0.001);
+      assertEqual(WaveManager.countdownActive, true);
+    });
+
+    T.it('倒计时结束后自动开始下一波', () => {
+      WaveManager.reset();
+      WaveManager.startCountdown();
+      WaveManager.update(CONFIG.waveCountdown + 0.1, []);
+      assertEqual(WaveManager.countdownActive, false);
+      assertEqual(WaveManager.active, true);
+      assertEqual(WaveManager.index, 1);
+    });
+
+    T.it('skipCountdown() 立即开始下一波', () => {
+      WaveManager.reset();
+      WaveManager.startCountdown();
+      const beforeIndex = WaveManager.index;
+      const result = WaveManager.skipCountdown();
+      assertEqual(result, true);
+      assertEqual(WaveManager.countdownActive, false);
+      assertEqual(WaveManager.active, true);
+      assertEqual(WaveManager.index, beforeIndex + 1);
+    });
+
+    T.it('skipCountdown() 在无倒计时时返回 false', () => {
+      WaveManager.reset();
+      const result = WaveManager.skipCountdown();
+      assertEqual(result, false);
+    });
+
+    T.it('所有波次打完后 startCountdown() 返回 false', () => {
+      WaveManager.reset();
+      WaveManager.index = CONFIG.waves.length;
+      const result = WaveManager.startCountdown();
+      assertEqual(result, false);
+    });
+  });
+})();
+
+function runTests() {
+  document.getElementById('running').innerHTML = '运行测试<span class="loading-dots"></span>';
+  setTimeout(() => TestRunner.run(), 100);
+}
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', runTests);
+} else {
+  runTests();
+}
+</script>
+</body>
+</html>
