@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>Tower Defense</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    color: #eee;
+    font-family: "Segoe UI", Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    user-select: none;
+  }
+  #wrap {
+    display: flex;
+    gap: 16px;
+    padding: 16px;
+  }
+  canvas {
+    background: #2d2d44;
+    border: 2px solid #4a4a6a;
+    display: block;
+    cursor: crosshair;
+  }
+  #side {
+    width: 220px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .panel {
+    background: #25253f;
+    border: 1px solid #3a3a5a;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin: 4px 0;
+    font-size: 14px;
+  }
+  .stat-row b { color: #ffd166; }
+  h3 { font-size: 15px; margin-bottom: 8px; color: #a0c4ff; }
+  .tower-btn {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin: 6px 0;
+    background: #38385a;
+    border: 2px solid #55558a;
+    border-radius: 6px;
+    color: #eee;
+    cursor: pointer;
+    text-align: left;
+    font-size: 13px;
+    transition: all .15s;
+  }
+  .tower-btn:hover { background: #484870; border-color: #8080c0; }
+  .tower-btn.selected { background: #4a5a8a; border-color: #a0c4ff; }
+  .tower-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .tower-btn .name { font-weight: bold; display: block; margin-bottom: 2px; }
+  .tower-btn .meta { font-size: 11px; color: #bbb; }
+  #startBtn, #restartBtn {
+    width: 100%;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+  }
+  #startBtn { background: #06d6a0; color: #0a2a20; }
+  #startBtn:hover { background: #09edb3; }
+  #startBtn:disabled { background: #555; color: #aaa; cursor: not-allowed; }
+  #restartBtn { background: #ef476f; color: #fff; display: none; }
+  #restartBtn:hover { background: #ff6b8d; }
+  #hint { font-size: 12px; color: #999; line-height: 1.5; }
+  #gameOver {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.7);
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 10;
+  }
+  #gameOver.show { display: flex; }
+  #gameOver h2 {
+    font-size: 48px;
+    color: #ef476f;
+    margin-bottom: 12px;
+  }
+  #gameOver p { font-size: 20px; margin: 6px 0; }
+  #gameOver button {
+    margin-top: 20px;
+    padding: 12px 32px;
+    font-size: 16px;
+    background: #06d6a0;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game" width="960" height="600"></canvas>
+  <div id="side">
+    <div class="panel">
+      <h3>状态栏</h3>
+      <div class="stat-row"><span>金币</span><b id="gold">0</b></div>
+      <div class="stat-row"><span>生命</span><b id="lives">0</b></div>
+      <div class="stat-row"><span>得分</span><b id="score">0</b></div>
+      <div class="stat-row"><span>波次</span><b id="wave">0</b> / <span id="maxWave">0</span></div>
+    </div>
+    <div class="panel">
+      <h3>建造防御塔</h3>
+      <button class="tower-btn" data-type="archer">
+        <span class="name">🏹 箭塔</span>
+        <span class="meta">攻击快 · 单体 · 造价 50</span>
+      </button>
+      <button class="tower-btn" data-type="cannon">
+        <span class="name">💣 炮塔</span>
+        <span class="meta">伤害高 · 溅射 · 造价 120</span>
+      </button>
+      <button class="tower-btn" data-type="frost">
+        <span class="name">❄️ 冰塔</span>
+        <span class="meta">减速敌人 · 造价 90</span>
+      </button>
+      <button id="startBtn">开始下一波</button>
+      <button id="restartBtn">重新开始</button>
+    </div>
+    <div class="panel">
+      <div id="hint">
+        点击左侧塔选中，再点击地图空地放置。<br>
+        塔不能建在路径上。<br>
+        怪物到达终点会扣命，命没了就结束。
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="gameOver">
+  <h2 id="goTitle">游戏结束</h2>
+  <p>最终得分：<b id="goScore">0</b></p>
+  <p>坚持到第 <b id="goWave">0</b> 波</p>
+  <button onclick="Game.restart()">再玩一次</button>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/map.js"></script>
+<script src="js/enemy.js"></script>
+<script src="js/bullet.js"></script>
+<script src="js/tower.js"></script>
+<script src="js/wave.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
