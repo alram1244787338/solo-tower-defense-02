@@ -3,12 +3,16 @@ const WaveManager = {
   active: false,
   spawnQueue: [],
   timer: 0,
+  countdown: 0,
+  countdownActive: false,
 
   reset() {
     this.index = 0;
     this.active = false;
     this.spawnQueue = [];
     this.timer = 0;
+    this.countdown = 0;
+    this.countdownActive = false;
   },
 
   startNext() {
@@ -25,10 +29,34 @@ const WaveManager = {
     this.active = true;
     this.timer = 0;
     this.index++;
+    this.countdownActive = false;
     return true;
   },
 
+  startCountdown() {
+    if (this.active) return false;
+    if (this.index >= CONFIG.waves.length) return false;
+    this.countdown = CONFIG.waveCountdown;
+    this.countdownActive = true;
+    return true;
+  },
+
+  skipCountdown() {
+    if (!this.countdownActive) return false;
+    this.countdown = 0;
+    this.countdownActive = false;
+    return this.startNext();
+  },
+
   update(dt, enemies) {
+    if (this.countdownActive) {
+      this.countdown -= dt;
+      if (this.countdown <= 0) {
+        this.countdown = 0;
+        this.countdownActive = false;
+        this.startNext();
+      }
+    }
     if (!this.active) return;
     this.timer -= dt;
     while (this.spawnQueue.length > 0 && this.timer <= 0) {

@@ -2,6 +2,15 @@ const CONFIG = {
   canvas: { width: 960, height: 600 },
   tile: 40,
   start: { gold: 200, lives: 20 },
+  waveCountdown: 5,
+  sellRefundRatio: 0.6,
+  maxTowerLevel: 3,
+  upgrade: {
+    damageMul: 1.6,
+    rangeMul: 1.15,
+    fireRateMul: 0.85,
+    costMul: 1.4,
+  },
 
   path: [
     { x: -20,  y: 100 },
@@ -13,7 +22,7 @@ const CONFIG = {
     { x: 820,  y: 460 },
     { x: 140,  y: 460 },
     { x: 140,  y: 540 },
-    { x: 980,  y: 540 },
+    { x: 940,  y: 540 },
   ],
   pathWidth: 36,
 

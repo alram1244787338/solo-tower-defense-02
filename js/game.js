@@ -25,6 +25,7 @@ const Game = {
     this.canvas = document.getElementById('game');
     this.ctx = this.canvas.getContext('2d');
 
+    Audio.init();
     GameMap.init();
     UI.init();
     this._bindInput();
@@ -45,11 +46,14 @@ const Game = {
     this.effects = [];
     this.over = false;
     this.victory = false;
+    this.paused = false;
     WaveManager.reset();
     UI.clearSelection();
     UI.hideGameOver();
     UI.showStart();
     UI.setStartDisabled(false);
+    UI.updatePauseButton(false);
+    UI.updateMuteButton(false);
     UI.update(this.gold, this.lives, this.score, 0);
   },
 
@@ -62,6 +66,44 @@ const Game = {
     if (WaveManager.startNext()) {
       UI.setStartDisabled(true);
     }
+  },
+
+  skipCountdown() {
+    if (WaveManager.skipCountdown()) {
+      UI.setStartDisabled(true);
+    }
+  },
+
+  togglePause() {
+    if (this.over) return;
+    this.paused = !this.paused;
+    UI.updatePauseButton(this.paused);
+  },
+
+  toggleMute() {
+    const muted = Audio.toggleMute();
+    UI.updateMuteButton(muted);
+  },
+
+  upgradeSelectedTower() {
+    const t = UI.selectedPlacedTower;
+    if (!t || !t.canUpgrade()) return;
+    const cost = t.getUpgradeCost();
+    if (this.gold < cost) return;
+    this.gold -= cost;
+    t.upgrade();
+    UI.update(this.gold, this.lives, this.score, WaveManager.index);
+  },
+
+  sellSelectedTower() {
+    const t = UI.selectedPlacedTower;
+    if (!t) return;
+    const refund = t.getSellValue();
+    this.gold += refund;
+    const idx = this.towers.indexOf(t);
+    if (idx !== -1) this.towers.splice(idx, 1);
+    UI.deselectPlacedTower();
+    UI.update(this.gold, this.lives, this.score, WaveManager.index);
   },
 
   _bindInput() {
@@ -96,11 +138,21 @@ const Game = {
 
     window.addEventListener('keydown', e => {
       if (e.key === 'Escape') UI.clearSelection();
+      if (e.key.toLowerCase() === 'p') this.togglePause();
+      if (e.key.toLowerCase() === 'm') this.toggleMute();
       if (e.key === '1') UI.selectTower('archer');
       if (e.key === '2') UI.selectTower('cannon');
       if (e.key === '3') UI.selectTower('frost');
-      if (e.key === ' ') { e.preventDefault(); this.startWave(); }
+      if (e.key === ' ') { e.preventDefault(); this._handleSpace(); }
     });
+  },
+
+  _handleSpace() {
+    if (WaveManager.countdownActive) {
+      this.skipCountdown();
+    } else {
+      this.startWave();
+    }
   },
 
   _updateHover() {
@@ -115,15 +167,28 @@ const Game = {
   },
 
   _onClick(x, y) {
-    if (this.over) return;
-    const type = UI.selectedTower;
-    if (!type) return;
-    if (!this._canPlace(x, y)) return;
-    const cfg = CONFIG.towers[type];
-    if (this.gold < cfg.cost) return;
-    this.gold -= cfg.cost;
-    this.towers.push(new Tower(type, x, y));
-    UI.update(this.gold, this.lives, this.score, WaveManager.index);
+    if (this.over || this.paused) return;
+    if (UI.selectedTower) {
+      if (!this._canPlace(x, y)) return;
+      const cfg = CONFIG.towers[UI.selectedTower];
+      if (this.gold < cfg.cost) return;
+      this.gold -= cfg.cost;
+      this.towers.push(new Tower(UI.selectedTower, x, y));
+      UI.update(this.gold, this.lives, this.score, WaveManager.index);
+      return;
+    }
+    for (let i = 0; i < this.towers.length; i++) {
+      const t = this.towers[i];
+      if (Math.hypot(x - t.x, y - t.y) <= t.size + 4) {
+        if (UI.selectedPlacedTower === t) {
+          UI.deselectPlacedTower();
+        } else {
+          UI.selectPlacedTower(t);
+        }
+        return;
+      }
+    }
+    UI.deselectPlacedTower();
   },
 
   _canPlace(x, y) {
@@ -172,6 +237,7 @@ const Game = {
       const e = this.enemies[i];
       if (e.reachedEnd) {
         this.lives--;
+        Audio.playLeak();
         this.enemies.splice(i, 1);
         if (this.lives <= 0) {
           this.lives = 0;
@@ -197,6 +263,7 @@ const Game = {
         this._gameOver(true);
       } else {
         this.gold += 30;
+        WaveManager.startCountdown();
         UI.setStartDisabled(false);
       }
     }
@@ -210,6 +277,7 @@ const Game = {
     UI.setStartDisabled(true);
     UI.hideStart();
     UI.showGameOver(victory, this.score, WaveManager.index);
+    Audio.playGameOver(victory);
   },
 
   _render() {
@@ -220,7 +288,9 @@ const Game = {
 
     for (let i = 0; i < this.towers.length; i++) {
       const t = this.towers[i];
-      t.draw(ctx, false, t === this.hoveredTower);
+      const isSelected = t === UI.selectedPlacedTower;
+      const isHovered = t === this.hoveredTower;
+      t.draw(ctx, isSelected, isHovered);
     }
 
     for (let i = 0; i < this.enemies.length; i++) {
@@ -236,6 +306,30 @@ const Game = {
     }
 
     this._drawPlacementPreview();
+
+    if (this.paused) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 56px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('⏸ 已暂停', this.canvas.width / 2, this.canvas.height / 2);
+      ctx.font = '18px Arial';
+      ctx.fillStyle = '#ccc';
+      ctx.fillText('按 P 或点击按钮继续', this.canvas.width / 2, this.canvas.height / 2 + 50);
+    }
+
+    if (WaveManager.countdownActive && !this.paused) {
+      ctx.fillStyle = 'rgba(255, 209, 102, 0.15)';
+      ctx.fillRect(0, 0, this.canvas.width, 40);
+      ctx.fillStyle = '#ffd166';
+      ctx.font = 'bold 18px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const sec = Math.ceil(WaveManager.countdown);
+      ctx.fillText(`下一波即将开始：${sec} 秒  ·  点击"跳过倒计时"立即开始`, this.canvas.width / 2, 20);
+    }
   },
 
   _drawPlacementPreview() {

@@ -16,9 +16,13 @@ class Bullet {
   }
 
   update(dt, enemies) {
+    const isSplash = this.splash > 0;
     if (this.target && this.target.alive) {
       this.targetX = this.target.x;
       this.targetY = this.target.y;
+    } else if (!isSplash) {
+      this.dead = true;
+      return;
     }
     const dx = this.targetX - this.x;
     const dy = this.targetY - this.y;
@@ -35,6 +39,7 @@ class Bullet {
   }
 
   _impact(enemies) {
+    let hit = false;
     if (this.splash > 0) {
       for (let i = 0; i < enemies.length; i++) {
         const e = enemies[i];
@@ -42,6 +47,7 @@ class Bullet {
         if (Math.hypot(e.x - this.x, e.y - this.y) <= this.splash) {
           e.damage(this.damage);
           if (this.slow > 0) e.applySlow(1 - this.slow, this.slowDuration);
+          hit = true;
         }
       }
       Game.effects.push(new Explosion(this.x, this.y, this.splash, this.color));
@@ -49,8 +55,10 @@ class Bullet {
       if (this.target && this.target.alive) {
         this.target.damage(this.damage);
         if (this.slow > 0) this.target.applySlow(1 - this.slow, this.slowDuration);
+        hit = true;
       }
     }
+    if (hit) Audio.playHit();
   }
 
   draw(ctx) {

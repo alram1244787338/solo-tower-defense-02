@@ -27,7 +27,7 @@
     cursor: crosshair;
   }
   #side {
-    width: 220px;
+    width: 240px;
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -45,6 +45,7 @@
     font-size: 14px;
   }
   .stat-row b { color: #ffd166; }
+  .stat-row .spacer { flex: 1; }
   h3 { font-size: 15px; margin-bottom: 8px; color: #a0c4ff; }
   .tower-btn {
     display: block;
@@ -65,7 +66,21 @@
   .tower-btn:disabled { opacity: .4; cursor: not-allowed; }
   .tower-btn .name { font-weight: bold; display: block; margin-bottom: 2px; }
   .tower-btn .meta { font-size: 11px; color: #bbb; }
-  #startBtn, #restartBtn {
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .btn-row button {
+    flex: 1;
+    padding: 8px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 13px;
+  }
+  #startBtn, #restartBtn, #pauseBtn, #muteBtn {
     width: 100%;
     padding: 10px;
     border: none;
@@ -77,9 +92,63 @@
   #startBtn { background: #06d6a0; color: #0a2a20; }
   #startBtn:hover { background: #09edb3; }
   #startBtn:disabled { background: #555; color: #aaa; cursor: not-allowed; }
-  #restartBtn { background: #ef476f; color: #fff; display: none; }
+  #pauseBtn { background: #ffd166; color: #333; margin-top: 6px; }
+  #pauseBtn:hover { background: #ffe08a; }
+  #pauseBtn.paused { background: #a0c4ff; color: #1a1a40; }
+  #muteBtn { background: #38385a; color: #eee; margin-top: 6px; }
+  #muteBtn:hover { background: #484870; }
+  #muteBtn.muted { background: #ef476f; }
+  #restartBtn { background: #ef476f; color: #fff; display: none; margin-top: 6px; }
   #restartBtn:hover { background: #ff6b8d; }
+  #upgradeBtn { background: #06d6a0; color: #0a2a20; }
+  #upgradeBtn:hover:not(:disabled) { background: #09edb3; }
+  #upgradeBtn:disabled { opacity: .5; cursor: not-allowed; }
+  #sellBtn { background: #ef476f; color: #fff; }
+  #sellBtn:hover { background: #ff6b8d; }
   #hint { font-size: 12px; color: #999; line-height: 1.5; }
+  #towerInfo { display: none; }
+  #towerInfo.show { display: block; }
+  #towerInfo .tower-name {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 6px;
+    color: #ffd166;
+  }
+  #towerInfo .info-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    margin: 3px 0;
+    color: #ccc;
+  }
+  #towerInfo .info-row b { color: #fff; }
+  .stat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    background: #38385a;
+    color: #eee;
+  }
+  .icon-btn:hover { background: #484870; }
+  .icon-btn.active { background: #a0c4ff; color: #1a1a40; }
+  #countdown {
+    font-size: 12px;
+    color: #ffd166;
+    text-align: center;
+    margin-top: 4px;
+    display: none;
+  }
+  #countdown.show { display: block; }
   #gameOver {
     display: none;
     position: fixed;
@@ -114,12 +183,32 @@
   <canvas id="game" width="960" height="600"></canvas>
   <div id="side">
     <div class="panel">
-      <h3>状态栏</h3>
+      <div class="stat-header">
+        <h3 style="margin:0;">状态栏</h3>
+        <div style="display:flex;gap:4px;">
+          <button id="pauseBtn" class="icon-btn" title="暂停 (P)">⏸</button>
+          <button id="muteBtn" class="icon-btn" title="静音 (M)">🔊</button>
+        </div>
+      </div>
       <div class="stat-row"><span>金币</span><b id="gold">0</b></div>
       <div class="stat-row"><span>生命</span><b id="lives">0</b></div>
       <div class="stat-row"><span>得分</span><b id="score">0</b></div>
       <div class="stat-row"><span>波次</span><b id="wave">0</b> / <span id="maxWave">0</span></div>
     </div>
+
+    <div class="panel" id="towerInfo">
+      <h3>塔信息</h3>
+      <div class="tower-name" id="tiName">-</div>
+      <div class="info-row"><span>等级</span><b id="tiLevel">1</b></div>
+      <div class="info-row"><span>伤害</span><b id="tiDamage">0</b></div>
+      <div class="info-row"><span>射程</span><b id="tiRange">0</b></div>
+      <div class="info-row"><span>攻速</span><b id="tiRate">0</b> /秒</div>
+      <div class="btn-row">
+        <button id="upgradeBtn">升级 💰0</button>
+        <button id="sellBtn">出售 💰0</button>
+      </div>
+    </div>
+
     <div class="panel">
       <h3>建造防御塔</h3>
       <button class="tower-btn" data-type="archer">
@@ -135,13 +224,14 @@
         <span class="meta">减速敌人 · 造价 90</span>
       </button>
       <button id="startBtn">开始下一波</button>
+      <div id="countdown">下一波：<b id="cdTime">5</b> 秒（点击跳过）</div>
       <button id="restartBtn">重新开始</button>
     </div>
     <div class="panel">
       <div id="hint">
         点击左侧塔选中，再点击地图空地放置。<br>
-        塔不能建在路径上。<br>
-        怪物到达终点会扣命，命没了就结束。
+        点击已放的塔可升级或出售。<br>
+        快捷键：P 暂停 · M 静音 · 1/2/3 选塔 · 空格开波 · Esc 取消。
       </div>
     </div>
   </div>
@@ -155,6 +245,7 @@
 </div>
 
 <script src="js/config.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/map.js"></script>
 <script src="js/enemy.js"></script>
 <script src="js/bullet.js"></script>
